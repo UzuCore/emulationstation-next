@@ -1582,6 +1582,48 @@ void GuiMenu::openSystemSettings()
 		s->addWithLabel(_("SCREEN BRIGHTNESS"), brightnessComponent);
 	}
 
+    // Default Display mode
+    std::vector<std::string> availableDisplayModes = ApiSystem::getInstance()->getAvailableDisplayModes();
+    if (! availableDisplayModes.empty()){
+        auto optionsDisplayModes = std::make_shared<OptionListComponent<std::string> >(mWindow, _("DISPLAY MODE"), false);
+        std::string selectedDisplayMode = SystemConf::getInstance()->get("system.display_mode");
+        for (auto it = availableDisplayModes.begin(); it != availableDisplayModes.end(); it++)
+        {
+            if (selectedDisplayMode.empty() && ((*it).find("preferred") != std::string::npos))
+            {
+                (*it) = (*it).substr((*it).find("px, ") + 4);
+                (*it) = (*it).substr(0, (*it).find(" Hz") + 3);
+                selectedDisplayMode = (*it);
+                continue;
+            }
+
+            // Remove resolution at start, and any trailing markers, e.g. "preferred" or  "current"
+            (*it) = (*it).substr((*it).find("px, ") + 4);
+            (*it) = (*it).substr(0, (*it).find(" Hz") + 3);
+        }
+        bool cfound = false;
+        for (auto it = availableDisplayModes.begin(); it != availableDisplayModes.end(); it++)
+        {
+	        optionsDisplayModes->add((*it), (*it), selectedDisplayMode == (*it));
+	        if (selectedDisplayMode == (*it))
+		        cfound = true;
+        }
+
+        if (!cfound)
+            optionsDisplayModes->add(selectedDisplayMode, selectedDisplayMode, true);
+
+        s->addWithLabel(_("DISPLAY MODE"), optionsDisplayModes);
+        s->addSaveFunc([selectedDisplayMode, optionsDisplayModes]
+        {
+            if (optionsDisplayModes->changed())
+            {
+                SystemConf::getInstance()->set("system.display_mode", optionsDisplayModes->getSelected());
+                SystemConf::getInstance()->saveSystemConf();
+                Utils::Platform::runSystemCommand("/usr/bin/sh -lc \". /etc/profile.d/010-wlr-randr; set_refresh_rate "+ optionsDisplayModes->getSelected() + "\"", "", nullptr);
+            }
+        });
+    }
+
 	if (Utils::Platform::GetEnv("DEVICE_PWR_LED_CONTROL") == "true") {
 		// Disable Power LED
 		auto pwr_led_disabled = std::make_shared<SwitchComponent>(mWindow);
@@ -2655,6 +2697,48 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
 			SystemConf::getInstance()->set(configName + ".gpuperf", gpuPerformance->getSelected());
 		}
 	});
+
+    // Per game/core/emu Display mode
+    std::vector<std::string> availableDisplayModes = ApiSystem::getInstance()->getAvailableDisplayModes();
+    if (! availableDisplayModes.empty()){
+        auto optionsDisplayModes = std::make_shared<OptionListComponent<std::string> >(mWindow, _("DISPLAY MODE"), false);
+
+        std::string selectedDisplayMode = SystemConf::getInstance()->get(configName + ".display_mode");
+        for (auto it = availableDisplayModes.begin(); it != availableDisplayModes.end(); it++)
+        {
+            if (selectedDisplayMode.empty())
+            {
+                selectedDisplayMode = "default";
+                continue;
+            }
+
+            // Remove resolution at start, and any trailing markers, e.g. "preferred" or  "current"
+            (*it) = (*it).substr((*it).find("px, ") + 4);
+            (*it) = (*it).substr(0, (*it).find(" Hz") + 3);
+        }
+        availableDisplayModes.insert(availableDisplayModes.begin(), "default");
+
+        cfound = false;
+        for (auto it = availableDisplayModes.begin(); it != availableDisplayModes.end(); it++)
+        {
+	        optionsDisplayModes->add((*it), (*it), selectedDisplayMode == (*it));
+	        if (selectedDisplayMode == (*it))
+		        cfound = true;
+        }
+
+        if (!cfound)
+            optionsDisplayModes->add(selectedDisplayMode, selectedDisplayMode, true);
+
+        guiSystemOptions->addWithLabel(_("DISPLAY MODE"), optionsDisplayModes);
+        guiSystemOptions->addSaveFunc([configName, selectedDisplayMode, optionsDisplayModes]
+        {
+            if (optionsDisplayModes->changed())
+            {
+                SystemConf::getInstance()->set(configName + ".display_mode", optionsDisplayModes->getSelected());
+                SystemConf::getInstance()->saveSystemConf();
+            }
+        });
+    }
 
 	mWindow->pushGui(guiSystemOptions);
 }
